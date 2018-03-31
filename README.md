@@ -1,6 +1,6 @@
 # slurp
  Enumerate S3 buckets via certstream, domain, or keywords
- 
+
 ## Overview
 - First of all, credit to https://github.com/eth0izzle/bucket-stream for the certstream idea.
 - Also, credit to all the vendor packages that made this tool possible.
@@ -27,7 +27,7 @@
 - **New** Supports a list of domains now.
 - Certstream mode so that you can enumerate s3 buckets in real time.
 - Colorized output for visual grep.
-- Currently generates over 1200 permutations per domain and keyword.
+- Currently generates over 28,000 permutations per domain and keyword (thanks to @jakewarren and @random-robbie for additions).
 - Strong copyleft license.
 
 ## Usage
@@ -35,6 +35,7 @@
 - `slurp keyword <-t|--target> linux,golang,python` will enumerate S3 buckets based on those 3 key words.
 - `slurp certstream` will follow certstream and enumerate S3 buckets from each domain.
 - `permutations.json` stores the permutations that are used by the program; they are in JSON format and loaded during execution **this is required**; it assumes a specific format per permutation: `anything_you_want.%s`; the ending `.%s` is **required** otherwise the AWS S3 URL will not be attached to it, and therefore no results will come from S3 enumeration. If you need flexible permutations then see `PermutateDomain` function.
+    - `permutations-large.json` is a much larger list that you can also use.
 
 ## Installation
 - Download from Releases section, or build yourself with `go build` or `build.sh`.
