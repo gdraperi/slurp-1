@@ -38,6 +38,7 @@ import (
 	"github.com/Workiva/go-datastructures/queue"
 )
 
+var kclient *http.Client
 var exit bool
 var dQ *queue.Queue
 var dbQ *queue.Queue
@@ -288,7 +289,7 @@ func PermutateKeywordRunner() {
 
 // CheckPermutations runs through all permutations checking them for PUBLIC/FORBIDDEN buckets
 func CheckPermutations() {
-	var max = runtime.NumCPU() * 10
+	var max = runtime.NumCPU()
 	sem = make(chan int, max)
 
 	for {
@@ -299,21 +300,7 @@ func CheckPermutations() {
 			log.Error(err)
 		}
 
-		tr := &http.Transport{
-			IdleConnTimeout:       3 * time.Second,
-			ResponseHeaderTimeout: 3 * time.Second,
-			MaxIdleConnsPerHost:   max,
-			ExpectContinueTimeout: 1 * time.Second,
-		}
-		client := &http.Client{
-			Transport: tr,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		}
-
 		go func(pd PermutatedDomain) {
-
 			req, err := http.NewRequest("GET", "http://s3-1-w.amazonaws.com", nil)
 
 			if err != nil {
@@ -329,7 +316,7 @@ func CheckPermutations() {
 			req.Host = pd.Permutation
 			//req.Header.Add("Host", host)
 
-			resp, err1 := client.Do(req)
+			resp, err1 := kclient.Do(req)
 
 			if err1 != nil {
 				if strings.Contains(err1.Error(), "time") {
@@ -357,7 +344,7 @@ func CheckPermutations() {
 					log.Error(err)
 				}
 
-				resp, err1 := client.Do(req)
+				resp, err1 := kclient.Do(req)
 
 				if err1 != nil {
 					if strings.Contains(err1.Error(), "time") {
@@ -395,7 +382,7 @@ func CheckPermutations() {
 
 // CheckKeywordPermutations runs through all permutations checking them for PUBLIC/FORBIDDEN buckets
 func CheckKeywordPermutations() {
-	var max = runtime.NumCPU() * 10
+	var max = 100
 	sem = make(chan int, max)
 
 	for {
@@ -404,19 +391,6 @@ func CheckKeywordPermutations() {
 
 		if err != nil {
 			log.Error(err)
-		}
-
-		tr := &http.Transport{
-			IdleConnTimeout:       3 * time.Second,
-			ResponseHeaderTimeout: 3 * time.Second,
-			MaxIdleConnsPerHost:   max,
-			ExpectContinueTimeout: 1 * time.Second,
-		}
-		client := &http.Client{
-			Transport: tr,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
 		}
 
 		go func(pd Keyword) {
@@ -435,7 +409,7 @@ func CheckKeywordPermutations() {
 			req.Host = pd.Permutation
 			//req.Header.Add("Host", host)
 
-			resp, err1 := client.Do(req)
+			resp, err1 := kclient.Do(req)
 
 			if err1 != nil {
 				if strings.Contains(err1.Error(), "time") {
@@ -463,7 +437,7 @@ func CheckKeywordPermutations() {
 					log.Error(err)
 				}
 
-				resp, err1 := client.Do(req)
+				resp, err1 := kclient.Do(req)
 
 				if err1 != nil {
 					if strings.Contains(err1.Error(), "time") {
@@ -595,6 +569,21 @@ func Init() {
 
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	tr := &http.Transport{
+		IdleConnTimeout:       250 * time.Millisecond,
+		ResponseHeaderTimeout: 3 * time.Second,
+		MaxIdleConnsPerHost:   100,
+		MaxIdleConns:          100,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	kclient = &http.Client{
+		Transport: tr,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 }
 
