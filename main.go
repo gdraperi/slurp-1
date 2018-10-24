@@ -39,12 +39,12 @@ import (
 )
 
 var kclient *http.Client
-var exit bool
 var domainQ *queue.Queue
 var permutatedQ *queue.Queue
 var extract *tldextract.TLDExtract
 var sem chan int
 var action string
+var cfgDebug bool
 var cfgPermutationsFile string
 var cfgKeywords []string
 var cfgDomains []string
@@ -99,9 +99,11 @@ var keywordCmd = &cobra.Command{
 func setFlags() {
 	domainCmd.PersistentFlags().StringSliceVarP(&cfgDomains, "target", "t", []string{}, "Domains to enumerate s3 buckets; format: example1.com,example2.com,example3.com")
 	domainCmd.PersistentFlags().StringVarP(&cfgPermutationsFile, "permutations", "p", "./permutations.json", "Permutations file location")
+	domainCmd.PersistentFlags().BoolVarP(&cfgDebug, "debug", "d", false, "Debug output")
 
 	keywordCmd.PersistentFlags().StringSliceVarP(&cfgKeywords, "target", "t", []string{}, "List of keywords to enumerate s3; format: keyword1,keyword2,keyword3")
 	keywordCmd.PersistentFlags().StringVarP(&cfgPermutationsFile, "permutations", "p", "./permutations.json", "Permutations file location")
+	keywordCmd.PersistentFlags().BoolVarP(&cfgDebug, "debug", "d", false, "Debug output")
 }
 
 // PreInit initializes goroutine concurrency and initializes cobra
@@ -142,6 +144,10 @@ func PreInit() {
 
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if cfgDebug {
+		log.SetLevel(log.DebugLevel)
 	}
 
 	if helpFlag {
@@ -328,14 +334,14 @@ func CheckDomainPermutations() {
 				if resp.StatusCode == 200 {
 					log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m %s (\033[33mhttp://%s.%s\033[39m)", loc, pd.Domain.Domain, pd.Domain.Suffix)
 				} else if resp.StatusCode == 403 {
-					log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
+					log.Debugf("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
 				}
 			} else if resp.StatusCode == 403 {
-				log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
+				log.Debugf("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
 			} else if resp.StatusCode == 404 {
-				log.Infof("\033[31m\033[1mNOT FOUND\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
+				log.Debugf("\033[31m\033[1mNOT FOUND\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
 			} else if resp.StatusCode == 503 {
-				log.Info("too fast")
+				log.Infof("\033[31m\033[1mTOO FAST\033[39m\033[0m")
 				permutatedQ.Put(pd)
 			} else {
 				log.Infof("\033[34m\033[1mUNKNOWN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m) (%d)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix, resp.StatusCode)
@@ -429,14 +435,14 @@ func CheckKeywordPermutations() {
 				if resp.StatusCode == 200 {
 					log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m %s (\033[33m%s\033[39m)", loc, pd.Keyword)
 				} else if resp.StatusCode == 403 {
-					log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m %s (\033[33m%s\033[39m)", loc, pd.Keyword)
+					log.Debugf("\033[31m\033[1mFORBIDDEN\033[39m\033[0m %s (\033[33m%s\033[39m)", loc, pd.Keyword)
 				}
 			} else if resp.StatusCode == 403 {
-				log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
+				log.Debugf("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
 			} else if resp.StatusCode == 404 {
-				log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
+				log.Debugf("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
 			} else if resp.StatusCode == 503 {
-				log.Info("too fast")
+				log.Infof("\033[31m\033[1mTOO FAST\033[39m\033[0m")
 				permutatedQ.Put(pd)
 			} else {
 				log.Infof("\033[34m\033[1mUNKNOWN\033[39m\033[0m http://%s (\033[33m%s\033[39m) (%d)", pd.Permutation, pd.Keyword, resp.StatusCode)
