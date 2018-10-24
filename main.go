@@ -20,6 +20,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -42,7 +43,6 @@ var exit bool
 var domainQ *queue.Queue
 var permutatedQ *queue.Queue
 var extract *tldextract.TLDExtract
-var checked int64
 var sem chan int
 var action string
 var cfgPermutationsFile string
@@ -147,6 +147,7 @@ func PreInit() {
 	if helpFlag {
 		os.Exit(0)
 	}
+
 }
 
 // Init does low level initialization before we can run
@@ -163,10 +164,10 @@ func Init() {
 	}
 
 	tr := &http.Transport{
-		IdleConnTimeout:       250 * time.Millisecond,
+		IdleConnTimeout:       1 * time.Second,
 		ResponseHeaderTimeout: 3 * time.Second,
 		MaxIdleConnsPerHost:   100,
-		MaxIdleConns:          100,
+		MaxIdleConns:          runtime.NumCPU(),
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
@@ -207,6 +208,10 @@ func PermutateDomainRunner(domains []string) {
 				Raw:    domains[i],
 			})
 		}
+	}
+
+	if domainQ.Len() == 0 {
+		os.Exit(1)
 	}
 
 	for {
@@ -260,6 +265,7 @@ func CheckDomainPermutations() {
 		}
 
 		go func(pd PermutatedDomain) {
+			time.Sleep(100 * time.Millisecond)
 			req, err := http.NewRequest("GET", "http://s3-1-w.amazonaws.com", nil)
 
 			if err != nil {
@@ -273,7 +279,6 @@ func CheckDomainPermutations() {
 			}
 
 			req.Host = pd.Permutation
-			//req.Header.Add("Host", host)
 
 			resp, err1 := kclient.Do(req)
 
@@ -289,12 +294,12 @@ func CheckDomainPermutations() {
 				<-sem
 				return
 			}
-
+			io.Copy(ioutil.Discard, resp.Body)
 			defer resp.Body.Close()
 
-			//log.Infof("%s (%d)", host, resp.StatusCode)
-
-			if resp.StatusCode == 307 {
+			if resp.StatusCode == 200 {
+				log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m %s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
+			} else if resp.StatusCode == 307 {
 				loc := resp.Header.Get("Location")
 
 				req, err := http.NewRequest("GET", loc, nil)
@@ -327,15 +332,21 @@ func CheckDomainPermutations() {
 				}
 			} else if resp.StatusCode == 403 {
 				log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
+			} else if resp.StatusCode == 404 {
+				log.Infof("\033[31m\033[1mNOT FOUND\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
 			} else if resp.StatusCode == 503 {
 				log.Info("too fast")
 				permutatedQ.Put(pd)
+			} else {
+				log.Infof("\033[34m\033[1mUNKNOWN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m) (%d)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix, resp.StatusCode)
 			}
-
-			checked = checked + 1
 
 			<-sem
 		}(dom[0].(PermutatedDomain))
+
+		if permutatedQ.Len() == 0 {
+			os.Exit(0)
+		}
 	}
 }
 
@@ -353,6 +364,7 @@ func CheckKeywordPermutations() {
 		}
 
 		go func(pd Keyword) {
+			time.Sleep(100 * time.Millisecond)
 			req, err := http.NewRequest("GET", "http://s3-1-w.amazonaws.com", nil)
 
 			if err != nil {
@@ -382,12 +394,13 @@ func CheckKeywordPermutations() {
 				<-sem
 				return
 			}
-
+			io.Copy(ioutil.Discard, resp.Body)
 			defer resp.Body.Close()
 
 			//log.Infof("%s (%d)", host, resp.StatusCode)
-
-			if resp.StatusCode == 307 {
+			if resp.StatusCode == 200 {
+				log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m %s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
+			} else if resp.StatusCode == 307 {
 				loc := resp.Header.Get("Location")
 
 				req, err := http.NewRequest("GET", loc, nil)
@@ -420,15 +433,21 @@ func CheckKeywordPermutations() {
 				}
 			} else if resp.StatusCode == 403 {
 				log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
+			} else if resp.StatusCode == 404 {
+				log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
 			} else if resp.StatusCode == 503 {
 				log.Info("too fast")
 				permutatedQ.Put(pd)
+			} else {
+				log.Infof("\033[34m\033[1mUNKNOWN\033[39m\033[0m http://%s (\033[33m%s\033[39m) (%d)", pd.Permutation, pd.Keyword, resp.StatusCode)
 			}
-
-			checked = checked + 1
 
 			<-sem
 		}(dom[0].(Keyword))
+
+		if permutatedQ.Len() == 0 {
+			os.Exit(0)
+		}
 	}
 }
 
