@@ -29,7 +29,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/CaliDog/certstream-go"
 	"github.com/jmoiron/jsonq"
 	"github.com/joeguo/tldextract"
 	"golang.org/x/net/idna"
@@ -40,14 +39,17 @@ import (
 
 var kclient *http.Client
 var exit bool
-var dQ *queue.Queue
-var dbQ *queue.Queue
+var domainQ *queue.Queue
 var permutatedQ *queue.Queue
 var extract *tldextract.TLDExtract
 var checked int64
 var sem chan int
 var action string
+var cfgPermutationsFile string
+var cfgKeywords []string
+var cfgDomains []string
 
+// Domain is used when `domain` action is used
 type Domain struct {
 	CN     string
 	Domain string
@@ -55,14 +57,16 @@ type Domain struct {
 	Raw    string
 }
 
-type PermutatedDomain struct {
-	Permutation string
-	Domain      Domain
-}
-
+// Keyword is used when `keyword` action is used
 type Keyword struct {
 	Permutation string
 	Keyword     string
+}
+
+// PermutatedDomain is a permutation of the domain
+type PermutatedDomain struct {
+	Permutation string
+	Domain      Domain
 }
 
 var rootCmd = &cobra.Command{
@@ -71,15 +75,6 @@ var rootCmd = &cobra.Command{
 	Long:  `slurp`,
 	Run: func(cmd *cobra.Command, args []string) {
 		action = "NADA"
-	},
-}
-
-var certstreamCmd = &cobra.Command{
-	Use:   "certstream",
-	Short: "Uses certstream to find s3 buckets in real-time",
-	Long:  "Uses certstream to find s3 buckets in real-time",
-	Run: func(cmd *cobra.Command, args []string) {
-		action = "CERTSTREAM"
 	},
 }
 
@@ -101,13 +96,7 @@ var keywordCmd = &cobra.Command{
 	},
 }
 
-var cfgPermutationsFile string
-var cfgKeywords []string
-var cfgDomains []string
-
 func setFlags() {
-	certstreamCmd.PersistentFlags().StringVarP(&cfgPermutationsFile, "permutations", "p", "./permutations.json", "Permutations file location")
-
 	domainCmd.PersistentFlags().StringSliceVarP(&cfgDomains, "target", "t", []string{}, "Domains to enumerate s3 buckets; format: example1.com,example2.com,example3.com")
 	domainCmd.PersistentFlags().StringVarP(&cfgPermutationsFile, "permutations", "p", "./permutations.json", "Permutations file location")
 
@@ -129,14 +118,6 @@ func PreInit() {
 	}
 	rootCmd.SetHelpFunc(newHelpCmd)
 
-	// certstreamCmd command help
-	helpCertstreamCmd := certstreamCmd.HelpFunc()
-	newCertstreamHelpCmd := func(c *cobra.Command, args []string) {
-		helpFlag = true
-		helpCertstreamCmd(c, args)
-	}
-	certstreamCmd.SetHelpFunc(newCertstreamHelpCmd)
-
 	// domainCmd command help
 	helpDomainCmd := domainCmd.HelpFunc()
 	newDomainHelpCmd := func(c *cobra.Command, args []string) {
@@ -154,7 +135,6 @@ func PreInit() {
 	keywordCmd.SetHelpFunc(newKeywordHelpCmd)
 
 	// Add subcommands
-	rootCmd.AddCommand(certstreamCmd)
 	rootCmd.AddCommand(domainCmd)
 	rootCmd.AddCommand(keywordCmd)
 
@@ -169,78 +149,68 @@ func PreInit() {
 	}
 }
 
-// StreamCerts takes input from certstream and stores it in the queue
-func StreamCerts() {
-	// The false flag specifies that we don't want heartbeat messages.
-	stream, errStream := certstream.CertStreamEventStream(false)
+// Init does low level initialization before we can run
+func Init() {
+	var err error
 
-	for {
-		select {
-		case jq := <-stream:
-			domain, err2 := jq.String("data", "leaf_cert", "subject", "CN")
+	domainQ = queue.New(1000)
+	permutatedQ = queue.New(1000)
 
-			if err2 != nil {
-				if !strings.Contains(err2.Error(), "Error decoding jq string") {
-					continue
-				}
-				log.Error(err2)
-			}
+	extract, err = tldextract.New("./tld.cache", false)
 
-			//log.Infof("Domain: %s", domain)
-			//log.Info(jq)
-
-			dQ.Put(domain)
-
-		case err := <-errStream:
-			log.Error(err)
-		}
+	if err != nil {
+		log.Fatal(err)
 	}
-}
 
-// ProcessQueue processes data stored in the queue
-func ProcessQueue() {
-	for {
-		cn, err := dQ.Get(1)
+	tr := &http.Transport{
+		IdleConnTimeout:       250 * time.Millisecond,
+		ResponseHeaderTimeout: 3 * time.Second,
+		MaxIdleConnsPerHost:   100,
+		MaxIdleConns:          100,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
 
-		if err != nil {
-			log.Error(err)
-			continue
-		}
-
-		//log.Infof("Domain: %s", cn[0].(string))
-
-		if !strings.Contains(cn[0].(string), "cloudflaressl") && !strings.Contains(cn[0].(string), "xn--") && len(cn[0].(string)) > 0 && !strings.HasPrefix(cn[0].(string), "*.") && !strings.HasPrefix(cn[0].(string), ".") {
-			punyCfgDomain, err := idna.ToASCII(cn[0].(string))
-			if err != nil {
-				log.Error(err)
-			}
-
-			result := extract.Extract(punyCfgDomain)
-			//domain := fmt.Sprintf("%s.%s", result.Root, result.Tld)
-
-			d := Domain{
-				CN:     punyCfgDomain,
-				Domain: result.Root,
-				Suffix: result.Tld,
-				Raw:    cn[0].(string),
-			}
-
-			if punyCfgDomain != cn[0].(string) {
-				log.Infof("%s is %s (punycode); AWS does not support internationalized buckets", cn[0].(string), punyCfgDomain)
-				continue
-			}
-
-			dbQ.Put(d)
-		}
-
-		//log.Infof("CN: %s\tDomain: %s", cn[0].(string), domain)
+	kclient = &http.Client{
+		Transport: tr,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 }
 
 // PermutateDomainRunner stores the dbQ results into the database
-func PermutateDomainRunner() {
+func PermutateDomainRunner(domains []string) {
+	for i := range domains {
+		if len(domains[i]) != 0 {
+			punyCfgDomain, err := idna.ToASCII(domains[i])
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			if domains[i] != punyCfgDomain {
+				log.Infof("Domain %s is %s (punycode)", domains[i], punyCfgDomain)
+				log.Errorf("Internationalized domains cannot be S3 buckets (%s)", domains[i])
+				continue
+			}
+
+			result := extract.Extract(punyCfgDomain)
+
+			if result.Root == "" || result.Tld == "" {
+				log.Errorf("%s is not a valid domain", punyCfgDomain)
+				continue
+			}
+
+			domainQ.Put(Domain{
+				CN:     punyCfgDomain,
+				Domain: result.Root,
+				Suffix: result.Tld,
+				Raw:    domains[i],
+			})
+		}
+	}
+
 	for {
-		dstruct, err := dbQ.Get(1)
+		dstruct, err := domainQ.Get(1)
 
 		if err != nil {
 			log.Error(err)
@@ -263,32 +233,21 @@ func PermutateDomainRunner() {
 }
 
 // PermutateKeywordRunner stores the dbQ results into the database
-func PermutateKeywordRunner() {
-	for {
-		dstruct, err := dbQ.Get(1)
-
-		if err != nil {
-			log.Error(err)
-			continue
-		}
-
-		var d string = dstruct[0].(string)
-
-		//log.Infof("CN: %s\tDomain: %s.%s", d.CN, d.Domain, d.Suffix)
-
-		pd := PermutateKeyword(d)
+func PermutateKeywordRunner(keywords []string) {
+	for keyword := range keywords {
+		pd := PermutateKeyword(keywords[keyword])
 
 		for p := range pd {
 			permutatedQ.Put(Keyword{
-				Keyword:     d,
+				Keyword:     keywords[keyword],
 				Permutation: pd[p],
 			})
 		}
 	}
 }
 
-// CheckPermutations runs through all permutations checking them for PUBLIC/FORBIDDEN buckets
-func CheckPermutations() {
+// CheckDomainPermutations runs through all permutations checking them for PUBLIC/FORBIDDEN buckets
+func CheckDomainPermutations() {
 	var max = runtime.NumCPU()
 	sem = make(chan int, max)
 
@@ -382,7 +341,7 @@ func CheckPermutations() {
 
 // CheckKeywordPermutations runs through all permutations checking them for PUBLIC/FORBIDDEN buckets
 func CheckKeywordPermutations() {
-	var max = 100
+	var max = runtime.NumCPU()
 	sem = make(chan int, max)
 
 	for {
@@ -555,183 +514,28 @@ func PermutateKeyword(keyword string) []string {
 	return permutations
 }
 
-// Init does low level initialization before we can run
-func Init() {
-	var err error
-
-	dQ = queue.New(1000)
-
-	dbQ = queue.New(1000)
-
-	permutatedQ = queue.New(1000)
-
-	extract, err = tldextract.New("./tld.cache", false)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	tr := &http.Transport{
-		IdleConnTimeout:       250 * time.Millisecond,
-		ResponseHeaderTimeout: 3 * time.Second,
-		MaxIdleConnsPerHost:   100,
-		MaxIdleConns:          100,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-
-	kclient = &http.Client{
-		Transport: tr,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-}
-
-// PrintJob prints the queue sizes
-func PrintJob() {
-	for {
-		log.Infof("dQ size: %d", dQ.Len())
-		log.Infof("dbQ size: %d", dbQ.Len())
-		log.Infof("permutatedQ size: %d", permutatedQ.Len())
-		log.Infof("Checked: %d", checked)
-
-		time.Sleep(10 * time.Second)
-	}
-}
-
 func main() {
 	PreInit()
 
 	switch action {
-	case "CERTSTREAM":
-		log.Info("Initializing....")
-		Init()
-
-		//go PrintJob()
-
-		log.Info("Starting to stream certs....")
-		go StreamCerts()
-
-		log.Info("Starting to process queue....")
-		go ProcessQueue()
-
-		//log.Info("Starting to stream certs....")
-		go PermutateDomainRunner()
-
-		log.Info("Starting to process permutations....")
-		go CheckPermutations()
-
-		for {
-			if exit {
-				break
-			}
-
-			time.Sleep(1 * time.Second)
-		}
 	case "DOMAIN":
 		Init()
 
-		for i := range cfgDomains {
-			if len(cfgDomains[i]) != 0 {
-				punyCfgDomain, err := idna.ToASCII(cfgDomains[i])
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				log.Infof("Domain %s is %s (punycode)", cfgDomains[i], punyCfgDomain)
-
-				if cfgDomains[i] != punyCfgDomain {
-					log.Errorf("Internationalized domains cannot be S3 buckets (%s)", cfgDomains[i])
-					continue
-				}
-
-				result := extract.Extract(punyCfgDomain)
-
-				if result.Root == "" || result.Tld == "" {
-					log.Errorf("%s is not a valid domain", punyCfgDomain)
-					continue
-				}
-
-				d := Domain{
-					CN:     punyCfgDomain,
-					Domain: result.Root,
-					Suffix: result.Tld,
-					Raw:    cfgDomains[i],
-				}
-
-				dbQ.Put(d)
-			}
-		}
-
-		if dbQ.Len() == 0 {
-			log.Fatal("Invalid domains format, see help")
-		}
-
-		//log.Info("Starting to process queue....")
-		//go ProcessQueue()
-
-		//log.Info("Starting to stream certs....")
-		go PermutateDomainRunner()
+		log.Info("Starting to permutate domains....")
+		go PermutateDomainRunner(cfgDomains)
 
 		log.Info("Starting to process permutations....")
-		go CheckPermutations()
-
-		for {
-			// 3 second hard sleep; added because sometimes it's possible to switch exit = true
-			// in the time it takes to get from dbQ.Put(d); we can't have that...
-			// So, a 3 sec sleep will prevent an pre-mature exit; but in most cases shouldn't really be noticable
-			time.Sleep(3 * time.Second)
-
-			if exit {
-				break
-			}
-
-			if permutatedQ.Len() != 0 || dbQ.Len() > 0 || len(sem) > 0 {
-				if len(sem) == 1 {
-					<-sem
-				}
-			} else {
-				exit = true
-			}
-		}
+		CheckDomainPermutations()
 
 	case "KEYWORD":
 		Init()
 
-		for i := range cfgKeywords {
-			if len(cfgKeywords[i]) != 0 {
-				dbQ.Put(cfgKeywords[i])
-			}
-		}
-
-		if dbQ.Len() == 0 {
-			log.Fatal("Invalid keywords format, see help")
-		}
-
-		//log.Info("Starting to stream certs....")
-		go PermutateKeywordRunner()
+		log.Info("Starting to permutate keywords....")
+		go PermutateKeywordRunner(cfgKeywords)
 
 		log.Info("Starting to process permutations....")
-		go CheckKeywordPermutations()
+		CheckKeywordPermutations()
 
-		for {
-			// 3 second hard sleep; added because sometimes it's possible to switch exit = true
-			// in the time it takes to get from dbQ.Put(d); we can't have that...
-			// So, a 3 sec sleep will prevent an pre-mature exit; but in most cases shouldn't really be noticable
-			time.Sleep(3 * time.Second)
-
-			if exit {
-				break
-			}
-
-			if permutatedQ.Len() != 0 || dbQ.Len() > 0 || len(sem) > 0 {
-				if len(sem) == 1 {
-					<-sem
-				}
-			} else {
-				exit = true
-			}
-		}
 	case "NADA":
 		log.Info("Check help")
 		os.Exit(0)
