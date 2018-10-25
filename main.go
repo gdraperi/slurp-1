@@ -306,7 +306,7 @@ func CheckDomainPermutations() {
 			defer resp.Body.Close()
 
 			if resp.StatusCode == 200 {
-				log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m %s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
+				log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
 				stats.IncRequests200()
 				stats.Add200Link(pd.Permutation)
 			} else if resp.StatusCode == 307 {
@@ -420,7 +420,7 @@ func CheckKeywordPermutations() {
 
 			//log.Infof("%s (%d)", host, resp.StatusCode)
 			if resp.StatusCode == 200 {
-				log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m %s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
+				log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
 				stats.IncRequests200()
 				stats.Add200Link(pd.Permutation)
 			} else if resp.StatusCode == 307 {
