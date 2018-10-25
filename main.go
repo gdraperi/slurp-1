@@ -45,6 +45,7 @@ var extract *tldextract.TLDExtract
 var sem chan int
 var action string
 var cfgDebug bool
+var cfgConcurrency int
 var cfgPermutationsFile string
 var cfgKeywords []string
 var cfgDomains []string
@@ -101,10 +102,13 @@ func setFlags() {
 	domainCmd.PersistentFlags().StringSliceVarP(&cfgDomains, "target", "t", []string{}, "Domains to enumerate s3 buckets; format: example1.com,example2.com,example3.com")
 	domainCmd.PersistentFlags().StringVarP(&cfgPermutationsFile, "permutations", "p", "./permutations.json", "Permutations file location")
 	domainCmd.PersistentFlags().BoolVarP(&cfgDebug, "debug", "d", false, "Debug output")
+	domainCmd.PersistentFlags().IntVarP(&cfgConcurrency, "concurrency", "c", 0, "Connection concurrency; default is the system CPU count")
 
 	keywordCmd.PersistentFlags().StringSliceVarP(&cfgKeywords, "target", "t", []string{}, "List of keywords to enumerate s3; format: keyword1,keyword2,keyword3")
 	keywordCmd.PersistentFlags().StringVarP(&cfgPermutationsFile, "permutations", "p", "./permutations.json", "Permutations file location")
 	keywordCmd.PersistentFlags().BoolVarP(&cfgDebug, "debug", "d", false, "Debug output")
+	keywordCmd.PersistentFlags().IntVarP(&cfgConcurrency, "concurrency", "c", 0, "Connection concurrency; default is the system CPU count")
+
 }
 
 // PreInit initializes goroutine concurrency and initializes cobra
@@ -151,6 +155,10 @@ func PreInit() {
 		log.SetLevel(log.DebugLevel)
 	}
 
+	if cfgConcurrency == 0 || cfgConcurrency < 0 {
+		cfgConcurrency = runtime.NumCPU()
+	}
+
 	if helpFlag {
 		os.Exit(0)
 	}
@@ -174,8 +182,8 @@ func Init() {
 	tr := &http.Transport{
 		IdleConnTimeout:       1 * time.Second,
 		ResponseHeaderTimeout: 3 * time.Second,
-		MaxIdleConnsPerHost:   100,
-		MaxIdleConns:          runtime.NumCPU(),
+		MaxIdleConnsPerHost:   cfgConcurrency * 4,
+		MaxIdleConns:          cfgConcurrency,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
@@ -261,7 +269,7 @@ func PermutateKeywordRunner(keywords []string) {
 
 // CheckDomainPermutations runs through all permutations checking them for PUBLIC/FORBIDDEN buckets
 func CheckDomainPermutations() {
-	var max = runtime.NumCPU()
+	var max = cfgConcurrency
 	sem = make(chan int, max)
 
 	for {
@@ -372,7 +380,7 @@ func CheckDomainPermutations() {
 
 // CheckKeywordPermutations runs through all permutations checking them for PUBLIC/FORBIDDEN buckets
 func CheckKeywordPermutations() {
-	var max = runtime.NumCPU()
+	var max = cfgConcurrency
 	sem = make(chan int, max)
 
 	for {
@@ -462,7 +470,7 @@ func CheckKeywordPermutations() {
 				stats.IncRequests403()
 				stats.Add403Link(pd.Permutation)
 			} else if resp.StatusCode == 404 {
-				log.Debugf("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
+				log.Debugf("\033[31m\033[1mNOT FOUND\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
 				stats.IncRequests404()
 				stats.Add404Link(pd.Permutation)
 			} else if resp.StatusCode == 503 {
