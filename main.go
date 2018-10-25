@@ -574,25 +574,25 @@ func main() {
 	case "DOMAIN":
 		Init()
 
-		log.Info("Starting to permutate domains....")
+		log.Info("Building permutations....")
 		go PermutateDomainRunner(cfgDomains)
 
 		// To stop premature exit
 		time.Sleep(3 * time.Second)
 
-		log.Info("Starting to process permutations....")
+		log.Info("Processing permutations....")
 		CheckDomainPermutations()
 
 	case "KEYWORD":
 		Init()
 
-		log.Info("Starting to permutate keywords....")
+		log.Info("Building permutations....")
 		go PermutateKeywordRunner(cfgKeywords)
 
 		// To stop premature exit
 		time.Sleep(3 * time.Second)
 
-		log.Info("Starting to process permutations....")
+		log.Info("Processing permutations....")
 		CheckKeywordPermutations()
 
 	case "NADA":
