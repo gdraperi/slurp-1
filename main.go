@@ -273,7 +273,7 @@ func CheckDomainPermutations() {
 		}
 
 		go func(pd PermutatedDomain) {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 			req, err := http.NewRequest("GET", "http://s3-1-w.amazonaws.com", nil)
 
 			if err != nil {
@@ -353,7 +353,7 @@ func CheckDomainPermutations() {
 				stats.IncRequests404()
 				stats.Add404Link(pd.Permutation)
 			} else if resp.StatusCode == 503 {
-				log.Infof("\033[31m\033[1mTOO FAST\033[39m\033[0m")
+				log.Infof("\033[31m\033[1mTOO FAST\033[39m\033[0m (added to queue to process later)")
 				permutatedQ.Put(pd)
 				stats.IncRequests503()
 				stats.Add503Link(pd.Permutation)
@@ -365,8 +365,7 @@ func CheckDomainPermutations() {
 		}(dom[0].(PermutatedDomain))
 
 		if permutatedQ.Len() == 0 {
-			log.Printf("%+v", stats)
-			os.Exit(0)
+			break
 		}
 	}
 }
@@ -385,7 +384,7 @@ func CheckKeywordPermutations() {
 		}
 
 		go func(pd Keyword) {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 			req, err := http.NewRequest("GET", "http://s3-1-w.amazonaws.com", nil)
 
 			if err != nil {
@@ -465,12 +464,12 @@ func CheckKeywordPermutations() {
 			} else if resp.StatusCode == 404 {
 				log.Debugf("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
 				stats.IncRequests404()
-				stats.Add403Link(pd.Permutation)
+				stats.Add404Link(pd.Permutation)
 			} else if resp.StatusCode == 503 {
-				log.Infof("\033[31m\033[1mTOO FAST\033[39m\033[0m")
+				log.Infof("\033[31m\033[1mTOO FAST\033[39m\033[0m (added to queue to process later)")
 				permutatedQ.Put(pd)
 				stats.IncRequests503()
-				stats.Add403Link(pd.Permutation)
+				stats.Add503Link(pd.Permutation)
 			} else {
 				log.Infof("\033[34m\033[1mUNKNOWN\033[39m\033[0m http://%s (\033[33m%s\033[39m) (%d)", pd.Permutation, pd.Keyword, resp.StatusCode)
 			}
@@ -479,8 +478,7 @@ func CheckKeywordPermutations() {
 		}(dom[0].(Keyword))
 
 		if permutatedQ.Len() == 0 {
-			log.Printf("%+v", stats)
-			os.Exit(0)
+			break
 		}
 	}
 }
@@ -575,10 +573,7 @@ func main() {
 		Init()
 
 		log.Info("Building permutations....")
-		go PermutateDomainRunner(cfgDomains)
-
-		// To stop premature exit
-		time.Sleep(3 * time.Second)
+		PermutateDomainRunner(cfgDomains)
 
 		log.Info("Processing permutations....")
 		CheckDomainPermutations()
@@ -587,10 +582,7 @@ func main() {
 		Init()
 
 		log.Info("Building permutations....")
-		go PermutateKeywordRunner(cfgKeywords)
-
-		// To stop premature exit
-		time.Sleep(3 * time.Second)
+		PermutateKeywordRunner(cfgKeywords)
 
 		log.Info("Processing permutations....")
 		CheckKeywordPermutations()
@@ -599,4 +591,7 @@ func main() {
 		log.Info("Check help")
 		os.Exit(0)
 	}
+
+	// Print stats info
+	log.Printf("%+v", stats)
 }
