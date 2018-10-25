@@ -340,12 +340,12 @@ func CheckDomainPermutations() {
 					stats.IncRequests200()
 					stats.Add200Link(loc)
 				} else if resp.StatusCode == 403 {
-					log.Debugf("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
+					log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
 					stats.IncRequests403()
 					stats.Add403Link(pd.Permutation)
 				}
 			} else if resp.StatusCode == 403 {
-				log.Debugf("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
+				log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
 				stats.IncRequests403()
 				stats.Add403Link(pd.Permutation)
 			} else if resp.StatusCode == 404 {
@@ -453,12 +453,12 @@ func CheckKeywordPermutations() {
 					stats.IncRequests200()
 					stats.Add200Link(loc)
 				} else if resp.StatusCode == 403 {
-					log.Debugf("\033[31m\033[1mFORBIDDEN\033[39m\033[0m %s (\033[33m%s\033[39m)", loc, pd.Keyword)
+					log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m %s (\033[33m%s\033[39m)", loc, pd.Keyword)
 					stats.IncRequests403()
 					stats.Add403Link(loc)
 				}
 			} else if resp.StatusCode == 403 {
-				log.Debugf("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
+				log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
 				stats.IncRequests403()
 				stats.Add403Link(pd.Permutation)
 			} else if resp.StatusCode == 404 {
