@@ -34,8 +34,8 @@ import (
 	"github.com/joeguo/tldextract"
 	"golang.org/x/net/idna"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/Workiva/go-datastructures/queue"
+	log "github.com/sirupsen/logrus"
 )
 
 var kclient *http.Client
