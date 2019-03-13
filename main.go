@@ -18,8 +18,6 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -30,12 +28,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jmoiron/jsonq"
 	"github.com/joeguo/tldextract"
 	"golang.org/x/net/idna"
 
 	"github.com/Workiva/go-datastructures/queue"
 	log "github.com/sirupsen/logrus"
+
+    "scanner/external"
 )
 
 var kclient *http.Client
@@ -242,7 +241,7 @@ func PermutateDomainRunner(domains []string) {
 
 		//log.Infof("CN: %s\tDomain: %s.%s", d.CN, d.Domain, d.Suffix)
 
-		pd := PermutateDomain(d.Domain, d.Suffix)
+		pd := external.PermutateDomain(d.Domain, d.Suffix, cfgPermutationsFile)
 
 		for p := range pd {
 			permutatedQ.Put(PermutatedDomain{
@@ -256,7 +255,7 @@ func PermutateDomainRunner(domains []string) {
 // PermutateKeywordRunner stores the dbQ results into the database
 func PermutateKeywordRunner(keywords []string) {
 	for keyword := range keywords {
-		pd := PermutateKeyword(keywords[keyword])
+		pd := external.PermutateKeyword(keywords[keyword], cfgPermutationsFile)
 
 		for p := range pd {
 			permutatedQ.Put(Keyword{
@@ -489,88 +488,6 @@ func CheckKeywordPermutations() {
 			break
 		}
 	}
-}
-
-// PermutateDomain returns all possible domain permutations
-func PermutateDomain(domain, suffix string) []string {
-	if _, err := os.Stat(cfgPermutationsFile); err != nil {
-		log.Fatal(err)
-	}
-
-	jsondata, err := ioutil.ReadFile(cfgPermutationsFile)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	data := map[string]interface{}{}
-	dec := json.NewDecoder(strings.NewReader(string(jsondata)))
-	dec.Decode(&data)
-	jq := jsonq.NewQuery(data)
-
-	s3url, err := jq.String("s3_url")
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var permutations []string
-
-	perms, err := jq.Array("permutations")
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Our list of permutations
-	for i := range perms {
-		permutations = append(permutations, fmt.Sprintf(perms[i].(string), domain, s3url))
-	}
-
-	// Permutations that are not easily put into the list
-	permutations = append(permutations, fmt.Sprintf("%s.%s.%s", domain, suffix, s3url))
-	permutations = append(permutations, fmt.Sprintf("%s.%s", strings.Replace(fmt.Sprintf("%s.%s", domain, suffix), ".", "", -1), s3url))
-
-	return permutations
-}
-
-// PermutateKeyword returns all possible keyword permutations
-func PermutateKeyword(keyword string) []string {
-	if _, err := os.Stat(cfgPermutationsFile); err != nil {
-		log.Fatal(err)
-	}
-
-	jsondata, err := ioutil.ReadFile(cfgPermutationsFile)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	data := map[string]interface{}{}
-	dec := json.NewDecoder(strings.NewReader(string(jsondata)))
-	dec.Decode(&data)
-	jq := jsonq.NewQuery(data)
-
-	s3url, err := jq.String("s3_url")
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var permutations []string
-
-	perms, err := jq.Array("permutations")
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Our list of permutations
-	for i := range perms {
-		permutations = append(permutations, fmt.Sprintf(perms[i].(string), keyword, s3url))
-	}
-
-	return permutations
 }
 
 func main() {
