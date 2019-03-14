@@ -22,11 +22,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"runtime"
 	"strings"
 	"time"
-
-	"github.com/spf13/cobra"
 
 	"github.com/joeguo/tldextract"
 	"golang.org/x/net/idna"
@@ -34,7 +31,9 @@ import (
 	"github.com/Workiva/go-datastructures/queue"
 	log "github.com/sirupsen/logrus"
 
-    "scanner/external"
+    "slurp/scanner/external"
+    "slurp/scanner/stats"
+    "slurp/scanner/cmd"
 )
 
 var kclient *http.Client
@@ -43,12 +42,10 @@ var permutatedQ *queue.Queue
 var extract *tldextract.TLDExtract
 var sem chan int
 var action string
-var cfgDebug bool
-var cfgConcurrency int
-var cfgPermutationsFile string
-var cfgKeywords []string
-var cfgDomains []string
-var stats *Stats
+
+// Global config
+var st *stats.Stats
+var cfg *cmd.Config
 
 // Domain is used when `domain` action is used
 type Domain struct {
@@ -70,101 +67,6 @@ type PermutatedDomain struct {
 	Domain      Domain
 }
 
-var rootCmd = &cobra.Command{
-	Use:   "slurp",
-	Short: "slurp",
-	Long:  `slurp`,
-	Run: func(cmd *cobra.Command, args []string) {
-		action = "NADA"
-	},
-}
-
-var domainCmd = &cobra.Command{
-	Use:   "domain",
-	Short: "Uses a list of domains to enumerate s3 buckets",
-	Long:  "Uses a list of domains to enumerate s3 buckets",
-	Run: func(cmd *cobra.Command, args []string) {
-		action = "DOMAIN"
-	},
-}
-
-var keywordCmd = &cobra.Command{
-	Use:   "keyword",
-	Short: "Uses a list of keywords to enumerate s3 buckets",
-	Long:  "Uses a list of keywords to enumerate s3 buckets",
-	Run: func(cmd *cobra.Command, args []string) {
-		action = "KEYWORD"
-	},
-}
-
-func setFlags() {
-	domainCmd.PersistentFlags().StringSliceVarP(&cfgDomains, "target", "t", []string{}, "Domains to enumerate s3 buckets; format: example1.com,example2.com,example3.com")
-	domainCmd.PersistentFlags().StringVarP(&cfgPermutationsFile, "permutations", "p", "./permutations.json", "Permutations file location")
-	domainCmd.PersistentFlags().BoolVarP(&cfgDebug, "debug", "d", false, "Debug output")
-	domainCmd.PersistentFlags().IntVarP(&cfgConcurrency, "concurrency", "c", 0, "Connection concurrency; default is the system CPU count")
-
-	keywordCmd.PersistentFlags().StringSliceVarP(&cfgKeywords, "target", "t", []string{}, "List of keywords to enumerate s3; format: keyword1,keyword2,keyword3")
-	keywordCmd.PersistentFlags().StringVarP(&cfgPermutationsFile, "permutations", "p", "./permutations.json", "Permutations file location")
-	keywordCmd.PersistentFlags().BoolVarP(&cfgDebug, "debug", "d", false, "Debug output")
-	keywordCmd.PersistentFlags().IntVarP(&cfgConcurrency, "concurrency", "c", 0, "Connection concurrency; default is the system CPU count")
-
-}
-
-// PreInit initializes goroutine concurrency and initializes cobra
-func PreInit() {
-	setFlags()
-
-	helpCmd := rootCmd.HelpFunc()
-
-	var helpFlag bool
-
-	newHelpCmd := func(c *cobra.Command, args []string) {
-		helpFlag = true
-		helpCmd(c, args)
-	}
-	rootCmd.SetHelpFunc(newHelpCmd)
-
-	// domainCmd command help
-	helpDomainCmd := domainCmd.HelpFunc()
-	newDomainHelpCmd := func(c *cobra.Command, args []string) {
-		helpFlag = true
-		helpDomainCmd(c, args)
-	}
-	domainCmd.SetHelpFunc(newDomainHelpCmd)
-
-	// keywordCmd command help
-	helpKeywordCmd := keywordCmd.HelpFunc()
-	newKeywordHelpCmd := func(c *cobra.Command, args []string) {
-		helpFlag = true
-		helpKeywordCmd(c, args)
-	}
-	keywordCmd.SetHelpFunc(newKeywordHelpCmd)
-
-	// Add subcommands
-	rootCmd.AddCommand(domainCmd)
-	rootCmd.AddCommand(keywordCmd)
-
-	err := rootCmd.Execute()
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if cfgDebug {
-		log.SetLevel(log.DebugLevel)
-	}
-
-	if cfgConcurrency == 0 || cfgConcurrency < 0 {
-		cfgConcurrency = runtime.NumCPU()
-	}
-
-	if helpFlag {
-		os.Exit(0)
-	}
-
-	stats = NewStats()
-}
-
 // Init does low level initialization before we can run
 func Init() {
 	var err error
@@ -181,8 +83,8 @@ func Init() {
 	tr := &http.Transport{
 		IdleConnTimeout:       1 * time.Second,
 		ResponseHeaderTimeout: 3 * time.Second,
-		MaxIdleConnsPerHost:   cfgConcurrency * 4,
-		MaxIdleConns:          cfgConcurrency,
+		MaxIdleConnsPerHost:   cfg.Concurrency * 4,
+		MaxIdleConns:          cfg.Concurrency,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
@@ -241,7 +143,7 @@ func PermutateDomainRunner(domains []string) {
 
 		//log.Infof("CN: %s\tDomain: %s.%s", d.CN, d.Domain, d.Suffix)
 
-		pd := external.PermutateDomain(d.Domain, d.Suffix, cfgPermutationsFile)
+		pd := external.PermutateDomain(d.Domain, d.Suffix, cfg.PermutationsFile)
 
 		for p := range pd {
 			permutatedQ.Put(PermutatedDomain{
@@ -255,7 +157,7 @@ func PermutateDomainRunner(domains []string) {
 // PermutateKeywordRunner stores the dbQ results into the database
 func PermutateKeywordRunner(keywords []string) {
 	for keyword := range keywords {
-		pd := external.PermutateKeyword(keywords[keyword], cfgPermutationsFile)
+		pd := external.PermutateKeyword(keywords[keyword], cfg.PermutationsFile)
 
 		for p := range pd {
 			permutatedQ.Put(Keyword{
@@ -268,7 +170,7 @@ func PermutateKeywordRunner(keywords []string) {
 
 // CheckDomainPermutations runs through all permutations checking them for PUBLIC/FORBIDDEN buckets
 func CheckDomainPermutations() {
-	var max = cfgConcurrency
+	var max = cfg.Concurrency
 	sem = make(chan int, max)
 
 	for {
@@ -314,8 +216,8 @@ func CheckDomainPermutations() {
 
 			if resp.StatusCode == 200 {
 				log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
-				stats.IncRequests200()
-				stats.Add200Link(pd.Permutation)
+				st.IncRequests200()
+				st.Add200Link(pd.Permutation)
 			} else if resp.StatusCode == 307 {
 				loc := resp.Header.Get("Location")
 
@@ -344,26 +246,26 @@ func CheckDomainPermutations() {
 
 				if resp.StatusCode == 200 {
 					log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m %s (\033[33mhttp://%s.%s\033[39m)", loc, pd.Domain.Domain, pd.Domain.Suffix)
-					stats.IncRequests200()
-					stats.Add200Link(loc)
+					st.IncRequests200()
+					st.Add200Link(loc)
 				} else if resp.StatusCode == 403 {
 					log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
-					stats.IncRequests403()
-					stats.Add403Link(pd.Permutation)
+					st.IncRequests403()
+					st.Add403Link(pd.Permutation)
 				}
 			} else if resp.StatusCode == 403 {
 				log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
-				stats.IncRequests403()
-				stats.Add403Link(pd.Permutation)
+				st.IncRequests403()
+				st.Add403Link(pd.Permutation)
 			} else if resp.StatusCode == 404 {
 				log.Debugf("\033[31m\033[1mNOT FOUND\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix)
-				stats.IncRequests404()
-				stats.Add404Link(pd.Permutation)
+				st.IncRequests404()
+				st.Add404Link(pd.Permutation)
 			} else if resp.StatusCode == 503 {
 				log.Infof("\033[31m\033[1mTOO FAST\033[39m\033[0m (added to queue to process later)")
 				permutatedQ.Put(pd)
-				stats.IncRequests503()
-				stats.Add503Link(pd.Permutation)
+				st.IncRequests503()
+				st.Add503Link(pd.Permutation)
 			} else {
 				log.Infof("\033[34m\033[1mUNKNOWN\033[39m\033[0m http://%s (\033[33mhttp://%s.%s\033[39m) (%d)", pd.Permutation, pd.Domain.Domain, pd.Domain.Suffix, resp.StatusCode)
 			}
@@ -379,7 +281,7 @@ func CheckDomainPermutations() {
 
 // CheckKeywordPermutations runs through all permutations checking them for PUBLIC/FORBIDDEN buckets
 func CheckKeywordPermutations() {
-	var max = cfgConcurrency
+	var max = cfg.Concurrency
 	sem = make(chan int, max)
 
 	for {
@@ -427,8 +329,8 @@ func CheckKeywordPermutations() {
 			//log.Infof("%s (%d)", host, resp.StatusCode)
 			if resp.StatusCode == 200 {
 				log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
-				stats.IncRequests200()
-				stats.Add200Link(pd.Permutation)
+				st.IncRequests200()
+				st.Add200Link(pd.Permutation)
 			} else if resp.StatusCode == 307 {
 				loc := resp.Header.Get("Location")
 
@@ -457,26 +359,26 @@ func CheckKeywordPermutations() {
 
 				if resp.StatusCode == 200 {
 					log.Infof("\033[32m\033[1mPUBLIC\033[39m\033[0m %s (\033[33m%s\033[39m)", loc, pd.Keyword)
-					stats.IncRequests200()
-					stats.Add200Link(loc)
+					st.IncRequests200()
+					st.Add200Link(loc)
 				} else if resp.StatusCode == 403 {
 					log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m %s (\033[33m%s\033[39m)", loc, pd.Keyword)
-					stats.IncRequests403()
-					stats.Add403Link(loc)
+					st.IncRequests403()
+					st.Add403Link(loc)
 				}
 			} else if resp.StatusCode == 403 {
 				log.Infof("\033[31m\033[1mFORBIDDEN\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
-				stats.IncRequests403()
-				stats.Add403Link(pd.Permutation)
+				st.IncRequests403()
+				st.Add403Link(pd.Permutation)
 			} else if resp.StatusCode == 404 {
 				log.Debugf("\033[31m\033[1mNOT FOUND\033[39m\033[0m http://%s (\033[33m%s\033[39m)", pd.Permutation, pd.Keyword)
-				stats.IncRequests404()
-				stats.Add404Link(pd.Permutation)
+				st.IncRequests404()
+				st.Add404Link(pd.Permutation)
 			} else if resp.StatusCode == 503 {
 				log.Infof("\033[31m\033[1mTOO FAST\033[39m\033[0m (added to queue to process later)")
 				permutatedQ.Put(pd)
-				stats.IncRequests503()
-				stats.Add503Link(pd.Permutation)
+				st.IncRequests503()
+				st.Add503Link(pd.Permutation)
 			} else {
 				log.Infof("\033[34m\033[1mUNKNOWN\033[39m\033[0m http://%s (\033[33m%s\033[39m) (%d)", pd.Permutation, pd.Keyword, resp.StatusCode)
 			}
@@ -491,14 +393,16 @@ func CheckKeywordPermutations() {
 }
 
 func main() {
-	PreInit()
+    c := cmd.CmdInit("slurp", "Public buckets finder", "Public buckets finder")
+    cfg = &c
+    st = c.Stats
 
-	switch action {
+	switch c.State {
 	case "DOMAIN":
 		Init()
 
 		log.Info("Building permutations....")
-		PermutateDomainRunner(cfgDomains)
+		PermutateDomainRunner(c.Domains)
 
 		log.Info("Processing permutations....")
 		CheckDomainPermutations()
@@ -507,7 +411,7 @@ func main() {
 		Init()
 
 		log.Info("Building permutations....")
-		PermutateKeywordRunner(cfgKeywords)
+		PermutateKeywordRunner(c.Keywords)
 
 		log.Info("Processing permutations....")
 		CheckKeywordPermutations()
@@ -518,5 +422,5 @@ func main() {
 	}
 
 	// Print stats info
-	log.Printf("%+v", stats)
+	log.Printf("%+v", st)
 }

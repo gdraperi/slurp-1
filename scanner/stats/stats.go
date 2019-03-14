@@ -2,7 +2,7 @@
 //
 // All rights reserved - Do Not Redistribute
 
-package main
+package stats
 
 import (
 	"encoding/json"
