@@ -3,6 +3,7 @@ package intern
 import (
     "encoding/json"
     "strings"
+    "regexp"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -59,7 +60,9 @@ func OpenPolicy(policy *string) (bool) {
     principal, _ := jq.String("Statement", "0", "Principal")
     action, _ := jq.String("Statement", "0", "Action")
 
-    if effect == "Allow" && principal == "*" && action == "s3:GetObject" {
+    re := regexp.MustCompile("(s3:Get\\*|s3:Describe\\*|s3:List\\*|s3:GetObject)")
+
+    if effect == "Allow" && principal == "*" && re.MatchString(action) {
         return true
     }
 
