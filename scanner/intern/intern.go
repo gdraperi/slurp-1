@@ -13,11 +13,13 @@ import (
     log "github.com/sirupsen/logrus"
 )
 
+// PublicBuckets stores a list of the public buckets either by ACL or by Policy
 type PublicBuckets struct {
     ACL    []string
     Policy []string
 }
 
+// GetBuckets returns all of the buckets
 func GetBuckets(config aws.Config) ([]string, error) {
 	svc := s3.New(session.New(), &config)
 	input := &s3.ListBucketsInput{}
@@ -46,6 +48,7 @@ func GetBuckets(config aws.Config) ([]string, error) {
 	return buckets, nil
 }
 
+// OpenPolicy checks a policy to see if its "open"
 func OpenPolicy(policy *string) (bool) {
     data := map[string]interface{}{}
     dec := json.NewDecoder(strings.NewReader(aws.StringValue(policy)))
@@ -63,6 +66,7 @@ func OpenPolicy(policy *string) (bool) {
     return false
 }
 
+// OpenACL checks an ACL to see if its "open"
 func OpenACL(grants []*s3.Grant) (bool) {
     for grant := range grants {
         //fmt.Println(aws.StringValue(grants[grant].Grantee.URI))
@@ -78,6 +82,7 @@ func OpenACL(grants []*s3.Grant) (bool) {
     return false
 }
 
+// GetBucketRegion determines the region for a bucket
 func GetBucketRegion(config aws.Config, bucket string) string {
     svc := s3.New(session.New(), &config)
     input := &s3.GetBucketLocationInput{}
@@ -114,6 +119,7 @@ func GetBucketRegion(config aws.Config, bucket string) string {
     return region
 }
 
+// GetPublicBuckets determines which buckets are public
 func GetPublicBuckets(config aws.Config) (PublicBuckets, error) {
     var pubBucket PublicBuckets
 
