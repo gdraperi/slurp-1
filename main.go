@@ -32,7 +32,7 @@ import (
 var cfg cmd.Config
 
 func main() {
-    cfg = cmd.CmdInit("slurp", "Public buckets finder", "Public buckets finder")
+    cfg = cmd.Init("slurp", "Public buckets finder", "Public buckets finder")
 
 	switch cfg.State {
 	case "DOMAIN":
@@ -61,6 +61,7 @@ func main() {
         var config aws.Config
         config.Region = &cfg.Region
 
+        log.Info("Determining public buckets....")
         buckets, err3 := intern.GetPublicBuckets(config)
         if err3 != nil {
             log.Error(err3)

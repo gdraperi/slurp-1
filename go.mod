@@ -3,9 +3,12 @@ module slurp
 require (
 	github.com/Workiva/go-datastructures v1.0.44
 	github.com/aws/aws-sdk-go v1.18.2
+	github.com/fatih/color v1.7.0
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/jsonq v0.0.0-20150511023944-e874b168d07e
 	github.com/joeguo/tldextract v0.0.0-20180214020933-b623e0574407
+	github.com/mattn/go-colorable v0.1.1 // indirect
+	github.com/mattn/go-isatty v0.0.7 // indirect
 	github.com/onsi/gomega v1.4.2 // indirect
 	github.com/sirupsen/logrus v1.4.0
 	github.com/spf13/cobra v0.0.1

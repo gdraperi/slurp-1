@@ -27,6 +27,7 @@ var domainCmd = &cobra.Command{}
 var keywordCmd = &cobra.Command{}
 var internalCmd = &cobra.Command{}
 
+// Config struct; stores config for global usage
 type Config struct {
 	Debug            bool
 	Concurrency      int
@@ -50,8 +51,10 @@ func setFlags() {
 	keywordCmd.PersistentFlags().IntVarP(&cfgConcurrency, "concurrency", "c", 0, "Connection concurrency; default is the system CPU count")
 
     internalCmd.PersistentFlags().StringVarP(&cfgAWSRegion, "region", "r", "us-west-2", "AWS Region to connect to")
+    internalCmd.PersistentFlags().BoolVarP(&cfgDebug, "debug", "d", false, "Debug output")
 }
 
+// NewCmd creates a new command based on the args
 func NewCmd(useDesc, shortDesc, longDesc, st string) *cobra.Command {
 	return &cobra.Command{
 		Use:   useDesc,
@@ -63,8 +66,8 @@ func NewCmd(useDesc, shortDesc, longDesc, st string) *cobra.Command {
 	}
 }
 
-// CmdInit initializes goroutine concurrency and initializes cobra
-func CmdInit(useDesc, shortDesc, longDesc string) Config {
+// Init initializes goroutine concurrency and initializes cobra
+func Init(useDesc, shortDesc, longDesc string) Config {
 	rootCmd = NewCmd(useDesc, shortDesc, longDesc, "ROOT")
     domainCmd = NewCmd("domain", "Domain based scanning mode", "Domain based scanning mode", "DOMAIN")
 	keywordCmd = NewCmd("keyword", "Keyword based scanning mode", "Domain based scanning mode", "KEYWORD")
