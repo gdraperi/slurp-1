@@ -20,10 +20,12 @@ package main
 import (
 	"os"
 
+    "github.com/aws/aws-sdk-go/aws"
 	log "github.com/sirupsen/logrus"
 
     "slurp/scanner/external"
     "slurp/scanner/cmd"
+    "slurp/scanner/intern"
 )
 
 // Global config
@@ -42,6 +44,8 @@ func main() {
 		log.Info("Processing permutations....")
 		external.CheckDomainPermutations(&cfg)
 
+        // Print stats info
+        log.Printf("%+v", cfg.Stats)
 	case "KEYWORD":
 		external.Init(&cfg)
 
@@ -51,11 +55,27 @@ func main() {
 		log.Info("Processing permutations....")
 		external.CheckKeywordPermutations(&cfg)
 
+        // Print stats info
+    	log.Printf("%+v", cfg.Stats)
+    case "INTERNAL":
+        var config aws.Config
+        config.Region = &cfg.Region
+
+        buckets, err3 := intern.GetPublicBuckets(config)
+        if err3 != nil {
+            log.Error(err3)
+        }
+
+        for bucket := range buckets.ACL {
+            log.Infof("S3 public bucket (ACL): %s", buckets.ACL[bucket])
+        }
+
+        for bucket := range buckets.Policy {
+            log.Infof("S3 public bucket (Policy): %s", buckets.Policy[bucket])
+        }
+
 	case "NADA":
 		log.Info("Check help")
 		os.Exit(0)
 	}
-
-	// Print stats info
-	log.Printf("%+v", cfg.Stats)
 }

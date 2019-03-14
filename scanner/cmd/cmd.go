@@ -15,6 +15,7 @@ import (
 var cfgDebug bool
 var cfgConcurrency int
 var cfgPermutationsFile string
+var cfgAWSRegion string
 var cfgKeywords []string
 var cfgDomains []string
 
@@ -24,10 +25,12 @@ var state string
 var rootCmd = &cobra.Command{}
 var domainCmd = &cobra.Command{}
 var keywordCmd = &cobra.Command{}
+var internalCmd = &cobra.Command{}
 
 type Config struct {
 	Debug            bool
 	Concurrency      int
+    Region           string
 	PermutationsFile string
     State            string
     Keywords         []string
@@ -45,6 +48,8 @@ func setFlags() {
 	keywordCmd.PersistentFlags().StringVarP(&cfgPermutationsFile, "permutations", "p", "./permutations.json", "Permutations file location")
 	keywordCmd.PersistentFlags().BoolVarP(&cfgDebug, "debug", "d", false, "Debug output")
 	keywordCmd.PersistentFlags().IntVarP(&cfgConcurrency, "concurrency", "c", 0, "Connection concurrency; default is the system CPU count")
+
+    internalCmd.PersistentFlags().StringVarP(&cfgAWSRegion, "region", "r", "us-west-2", "AWS Region to connect to")
 }
 
 func NewCmd(useDesc, shortDesc, longDesc, st string) *cobra.Command {
@@ -63,6 +68,7 @@ func CmdInit(useDesc, shortDesc, longDesc string) Config {
 	rootCmd = NewCmd(useDesc, shortDesc, longDesc, "ROOT")
     domainCmd = NewCmd("domain", "Domain based scanning mode", "Domain based scanning mode", "DOMAIN")
 	keywordCmd = NewCmd("keyword", "Keyword based scanning mode", "Domain based scanning mode", "KEYWORD")
+    internalCmd = NewCmd("internal", "Scan based on AWS credentials", "Scan based on AWS credentials", "INTERNAL")
 
     setFlags()
 
@@ -92,9 +98,18 @@ func CmdInit(useDesc, shortDesc, longDesc string) Config {
 	}
 	keywordCmd.SetHelpFunc(newKeywordHelpCmd)
 
+    // internalCmd command help
+	helpInternalCmd := internalCmd.HelpFunc()
+	newInternalHelpCmd := func(c *cobra.Command, args []string) {
+		helpFlag = true
+		helpInternalCmd(c, args)
+	}
+	internalCmd.SetHelpFunc(newInternalHelpCmd)
+
 	// Add subcommands
 	rootCmd.AddCommand(domainCmd)
 	rootCmd.AddCommand(keywordCmd)
+    rootCmd.AddCommand(internalCmd)
 
 	err := rootCmd.Execute()
 
@@ -118,6 +133,7 @@ func CmdInit(useDesc, shortDesc, longDesc string) Config {
 		Debug:            cfgDebug,
 		Concurrency:      cfgConcurrency,
         PermutationsFile: cfgPermutationsFile,
+        Region:           cfgAWSRegion,
         State:            state,
         Keywords:         cfgKeywords,
         Domains:          cfgDomains,
