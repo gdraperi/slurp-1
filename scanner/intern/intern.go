@@ -1,7 +1,6 @@
 package intern
 
 import (
-	"fmt"
     "encoding/json"
     "strings"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 
     "github.com/jmoiron/jsonq"
+    log "github.com/sirupsen/logrus"
 )
 
 type PublicBuckets struct {
@@ -27,12 +27,12 @@ func GetBuckets(config aws.Config) ([]string, error) {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			default:
-				fmt.Println(aerr.Error())
+				log.Error(aerr.Error())
 			}
 		} else {
 			// Print the error, cast err to awserr.Error to get the Code and
 			// Message from an error.
-			fmt.Println(err.Error())
+			log.Error(err.Error())
 		}
 		return []string{}, err
 	}
@@ -87,18 +87,22 @@ func GetBucketRegion(config aws.Config, bucket string) string {
     if err != nil {
         if aerr, ok := err.(awserr.Error); ok {
             switch aerr.Code() {
+            case "AccessDenied":
+                log.Errorf("AccessDenied for bucket: %s (using default: %s)\n", bucket, aws.StringValue(config.Region))
+                return aws.StringValue(config.Region)
             default:
-                fmt.Println(aerr.Error())
+                log.Error(aerr.Error())
             }
         } else {
             // Print the error, cast err to awserr.Error to get the Code and
             // Message from an error.
-            fmt.Println(err.Error())
+            log.Error(err.Error())
         }
     }
 
     var region string
 
+    //log.Infof("%s %s", result.String(), bucket)
     if strings.Contains(result.String(), "LocationConstraint") {
         region = aws.StringValue(result.LocationConstraint)
     } else {
@@ -118,12 +122,12 @@ func GetPublicBuckets(config aws.Config) (PublicBuckets, error) {
         if aerr, ok := err.(awserr.Error); ok {
             switch aerr.Code() {
             default:
-                fmt.Println(aerr.Error())
+                log.Error(aerr.Error())
             }
         } else {
             // Print the error, cast err to awserr.Error to get the Code and
             // Message from an error.
-            fmt.Println(err.Error())
+            log.Error(err.Error())
         }
         return pubBucket, err
     }
@@ -141,16 +145,19 @@ func GetPublicBuckets(config aws.Config) (PublicBuckets, error) {
                 switch aerr.Code() {
                 case "NoSuchBucketPolicy":
                 case "BucketRegionError":
-                    fmt.Printf("%s: %s\n", buckets[bucket], aerr.Error())
+                    log.Errorf("%s: %s\n", buckets[bucket], aerr.Error())
                 case "AccessDenied":
-                    fmt.Printf("AccessDenied for bucket: %s\n", buckets[bucket])
+                    log.Errorf("AccessDenied for bucket: %s (skipping)\n", buckets[bucket])
+                    continue
+                case "AuthorizationHeaderMalformed":
+                    log.Errorf("AuthorizationHeaderMalformed for bucket: %s (%s)\n", buckets[bucket], aerr.Error())
                 default:
-                    fmt.Printf("%s: %s\n", buckets[bucket], aerr.Error())
+                    log.Errorf("%s: %s\n", buckets[bucket], aerr.Error())
                 }
             } else {
                 // Print the error, cast err to awserr.Error to get the Code and
                 // Message from an error.
-                fmt.Println(err.Error())
+                log.Error(err.Error())
             }
         }
 
