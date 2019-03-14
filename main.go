@@ -37,7 +37,7 @@ func main() {
 		external.Init(&cfg)
 
 		log.Info("Building permutations....")
-		external.PermutateDomainRunner(cfg.Domains, &cfg)
+		external.PermutateDomainRunner(&cfg)
 
 		log.Info("Processing permutations....")
 		external.CheckDomainPermutations(&cfg)
@@ -46,7 +46,7 @@ func main() {
 		external.Init(&cfg)
 
 		log.Info("Building permutations....")
-		external.PermutateKeywordRunner(cfg.Keywords, &cfg)
+		external.PermutateKeywordRunner(&cfg)
 
 		log.Info("Processing permutations....")
 		external.CheckKeywordPermutations(&cfg)

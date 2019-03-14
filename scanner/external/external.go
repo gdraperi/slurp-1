@@ -129,17 +129,17 @@ func PermutateKeyword(keyword, cfgPermutationsFile string) []string {
 }
 
 // PermutateDomainRunner stores the dbQ results into the database
-func PermutateDomainRunner(domains []string, cfg *cmd.Config) {
-	for i := range domains {
-		if len(domains[i]) != 0 {
-			punyCfgDomain, err := idna.ToASCII(domains[i])
+func PermutateDomainRunner(cfg *cmd.Config) {
+	for i := range cfg.Domains {
+		if len(cfg.Domains[i]) != 0 {
+			punyCfgDomain, err := idna.ToASCII(cfg.Domains[i])
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			if domains[i] != punyCfgDomain {
-				log.Infof("Domain %s is %s (punycode)", domains[i], punyCfgDomain)
-				log.Errorf("Internationalized domains cannot be S3 buckets (%s)", domains[i])
+			if cfg.Domains[i] != punyCfgDomain {
+				log.Infof("Domain %s is %s (punycode)", cfg.Domains[i], punyCfgDomain)
+				log.Errorf("Internationalized domains cannot be S3 buckets (%s)", cfg.Domains[i])
 				continue
 			}
 
@@ -154,7 +154,7 @@ func PermutateDomainRunner(domains []string, cfg *cmd.Config) {
 				CN:     punyCfgDomain,
 				Domain: result.Root,
 				Suffix: result.Tld,
-				Raw:    domains[i],
+				Raw:    cfg.Domains[i],
 			})
 		}
 	}
@@ -187,13 +187,13 @@ func PermutateDomainRunner(domains []string, cfg *cmd.Config) {
 }
 
 // PermutateKeywordRunner stores the dbQ results into the database
-func PermutateKeywordRunner(keywords []string, cfg *cmd.Config) {
-	for keyword := range keywords {
-		pd := PermutateKeyword(keywords[keyword], cfg.PermutationsFile)
+func PermutateKeywordRunner(cfg *cmd.Config) {
+	for keyword := range cfg.Keywords {
+		pd := PermutateKeyword(cfg.Keywords[keyword], cfg.PermutationsFile)
 
 		for p := range pd {
 			permutatedQ.Put(Keyword{
-				Keyword:     keywords[keyword],
+				Keyword:     cfg.Keywords[keyword],
 				Permutation: pd[p],
 			})
 		}
