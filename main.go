@@ -23,39 +23,33 @@ import (
 	log "github.com/sirupsen/logrus"
 
     "slurp/scanner/external"
-    "slurp/scanner/stats"
     "slurp/scanner/cmd"
 )
 
-var action string
-
 // Global config
-var st *stats.Stats
-var cfg *cmd.Config
+var cfg cmd.Config
 
 func main() {
-    c := cmd.CmdInit("slurp", "Public buckets finder", "Public buckets finder")
-    cfg = &c
-    st = c.Stats
+    cfg = cmd.CmdInit("slurp", "Public buckets finder", "Public buckets finder")
 
-	switch c.State {
+	switch cfg.State {
 	case "DOMAIN":
-		external.Init(cfg)
+		external.Init(&cfg)
 
 		log.Info("Building permutations....")
-		external.PermutateDomainRunner(c.Domains, cfg)
+		external.PermutateDomainRunner(cfg.Domains, &cfg)
 
 		log.Info("Processing permutations....")
-		external.CheckDomainPermutations(cfg)
+		external.CheckDomainPermutations(&cfg)
 
 	case "KEYWORD":
-		external.Init(cfg)
+		external.Init(&cfg)
 
 		log.Info("Building permutations....")
-		external.PermutateKeywordRunner(c.Keywords, cfg)
+		external.PermutateKeywordRunner(cfg.Keywords, &cfg)
 
 		log.Info("Processing permutations....")
-		external.CheckKeywordPermutations(cfg)
+		external.CheckKeywordPermutations(&cfg)
 
 	case "NADA":
 		log.Info("Check help")
@@ -63,5 +57,5 @@ func main() {
 	}
 
 	// Print stats info
-	log.Printf("%+v", st)
+	log.Printf("%+v", cfg.Stats)
 }
