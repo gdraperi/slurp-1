@@ -75,8 +75,10 @@ func OpenACL(grants []*s3.Grant) (bool) {
         //fmt.Println(aws.StringValue(grants[grant].Grantee.URI))
         //fmt.Println(aws.StringValue(grants[grant].Permission))
 
+        re := regexp.MustCompile("(READ|WRITE|FULL_CONTROL)")
+
         if aws.StringValue(grants[grant].Grantee.URI) == "http://acs.amazonaws.com/groups/global/AllUsers" {
-            if aws.StringValue(grants[grant].Permission) == "READ" || aws.StringValue(grants[grant].Permission) == "FULL_CONTROL" || aws.StringValue(grants[grant].Permission) == "WRITE" {
+            if re.MatchString(aws.StringValue(grants[grant].Permission)) {
                 return true
             }
         }
