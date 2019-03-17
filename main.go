@@ -18,8 +18,6 @@
 package main
 
 import (
-	"os"
-
     "github.com/aws/aws-sdk-go/aws"
 	log "github.com/sirupsen/logrus"
 
@@ -75,8 +73,7 @@ func main() {
             log.Infof("S3 public bucket (Policy): %s", buckets.Policy[bucket])
         }
 
-	case "NADA":
-		log.Info("Check help")
-		os.Exit(0)
+	default:
+		log.Fatal("Check help")
 	}
 }
