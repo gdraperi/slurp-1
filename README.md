@@ -24,7 +24,7 @@ In this mode, you are using the permutations list to conduct scans. It will retu
 ![domain-scan](./docs/domain.png)
 
 #### Keywords
-![keyword-scan](./docs/keyword.png)
+![keyword-scan](./docs/keywords.png)
 
 ### Whitebox (internal)
 In this mode, you are using the AWS API **with credentials** on a specific account *that you own* to see what is open. This method pulls all S3 buckets and checks Policy/ACL permissions. Note that, I will not provide support on how to use the AWS API. Your credentials should be in `~/.aws/credentials`.
