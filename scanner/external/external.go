@@ -1,3 +1,20 @@
+// slurp s3 bucket enumerator
+// Copyright (C) 2019 hehnope
+//
+// slurp is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// slurp is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Foobar. If not, see <http://www.gnu.org/licenses/>.
+//
+
 package external
 
 import (
@@ -173,7 +190,7 @@ func PermutateDomainRunner(cfg *cmd.Config) {
 
 		var d Domain = dstruct[0].(Domain)
 
-		//log.Infof("CN: %s\tDomain: %s.%s", d.CN, d.Domain, d.Suffix)
+		log.Debugf("CN: %s\tDomain: %s.%s", d.CN, d.Domain, d.Suffix)
 
 		pd := PermutateDomain(d.Domain, d.Suffix, cfg.PermutationsFile)
 

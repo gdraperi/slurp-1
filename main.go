@@ -1,18 +1,18 @@
 // slurp s3 bucket enumerator
-// Copyright (C) 2017 8c30ff1057d69a6a6f6dc2212d8ec25196c542acb8620eb4148318a4b10dd131
+// Copyright (C) 2019 hehnope
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as
-// published by the Free Software Foundation, either version 3 of the
-// License, or (at your option) any later version.
+// slurp is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-// This program is distributed in the hope that it will be useful,
+// slurp is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
+// GNU General Public License for more details.
 //
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU General Public License
+// along with Foobar. If not, see <http://www.gnu.org/licenses/>.
 //
 
 package main
@@ -37,7 +37,7 @@ func main() {
 		external.Init(&cfg)
 
 		log.Info("Building permutations....")
-		external.PermutateDomainRunner(&cfg)
+		go external.PermutateDomainRunner(&cfg)
 
 		log.Info("Processing permutations....")
 		external.CheckDomainPermutations(&cfg)
@@ -48,7 +48,7 @@ func main() {
 		external.Init(&cfg)
 
 		log.Info("Building permutations....")
-		external.PermutateKeywordRunner(&cfg)
+		go external.PermutateKeywordRunner(&cfg)
 
 		log.Info("Processing permutations....")
 		external.CheckKeywordPermutations(&cfg)
