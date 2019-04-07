@@ -22,10 +22,10 @@ import (
     "strings"
     "regexp"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+    "github.com/aws/aws-sdk-go/aws"
+    "github.com/aws/aws-sdk-go/aws/awserr"
+    "github.com/aws/aws-sdk-go/aws/session"
+    "github.com/aws/aws-sdk-go/service/s3"
 
     "github.com/jmoiron/jsonq"
     log "github.com/sirupsen/logrus"
@@ -39,31 +39,31 @@ type PublicBuckets struct {
 
 // GetBuckets returns all of the buckets
 func GetBuckets(config aws.Config) ([]string, error) {
-	svc := s3.New(session.New(), &config)
-	input := &s3.ListBucketsInput{}
+    svc := s3.New(session.New(), &config)
+    input := &s3.ListBucketsInput{}
 
-	result, err := svc.ListBuckets(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				log.Error(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			log.Error(err.Error())
-		}
-		return []string{}, err
-	}
+    result, err := svc.ListBuckets(input)
+    if err != nil {
+        if aerr, ok := err.(awserr.Error); ok {
+            switch aerr.Code() {
+            default:
+                log.Error(aerr.Error())
+            }
+        } else {
+            // Print the error, cast err to awserr.Error to get the Code and
+            // Message from an error.
+            log.Error(err.Error())
+        }
+        return []string{}, err
+    }
 
-	var buckets []string
+    var buckets []string
 
-	for bucket := range result.Buckets {
-		buckets = append(buckets, aws.StringValue(result.Buckets[bucket].Name))
-	}
+    for bucket := range result.Buckets {
+        buckets = append(buckets, aws.StringValue(result.Buckets[bucket].Name))
+    }
 
-	return buckets, nil
+    return buckets, nil
 }
 
 // OpenPolicy checks a policy to see if its "open"

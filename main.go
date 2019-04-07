@@ -19,7 +19,7 @@ package main
 
 import (
     "github.com/aws/aws-sdk-go/aws"
-	log "github.com/sirupsen/logrus"
+    log "github.com/sirupsen/logrus"
 
     "slurp/scanner/external"
     "slurp/scanner/cmd"
@@ -32,29 +32,29 @@ var cfg cmd.Config
 func main() {
     cfg = cmd.Init("slurp", "Public buckets finder", "Public buckets finder")
 
-	switch cfg.State {
-	case "DOMAIN":
-		external.Init(&cfg)
+    switch cfg.State {
+    case "DOMAIN":
+        external.Init(&cfg)
 
-		log.Info("Building permutations....")
-		go external.PermutateDomainRunner(&cfg)
+        log.Info("Building permutations....")
+        go external.PermutateDomainRunner(&cfg)
 
-		log.Info("Processing permutations....")
-		external.CheckDomainPermutations(&cfg)
+        log.Info("Processing permutations....")
+        external.CheckDomainPermutations(&cfg)
 
         // Print stats info
         log.Printf("%+v", cfg.Stats)
-	case "KEYWORD":
-		external.Init(&cfg)
+    case "KEYWORD":
+        external.Init(&cfg)
 
-		log.Info("Building permutations....")
-		go external.PermutateKeywordRunner(&cfg)
+        log.Info("Building permutations....")
+        go external.PermutateKeywordRunner(&cfg)
 
-		log.Info("Processing permutations....")
-		external.CheckKeywordPermutations(&cfg)
+        log.Info("Processing permutations....")
+        external.CheckKeywordPermutations(&cfg)
 
         // Print stats info
-    	log.Printf("%+v", cfg.Stats)
+        log.Printf("%+v", cfg.Stats)
     case "INTERNAL":
         var config aws.Config
         config.Region = &cfg.Region
@@ -73,7 +73,7 @@ func main() {
             log.Infof("S3 public bucket (Policy): %s", buckets.Policy[bucket])
         }
 
-	default:
-		log.Fatal("Check help")
-	}
+    default:
+        log.Fatal("Check help")
+    }
 }
